@@ -10,7 +10,7 @@ plugins {
 
 android {
     namespace = "com.example.leafcare"
-    compileSdk = 34
+    compileSdk = 35
     ndkVersion "27.0.12077973" // ✅ Set correct static NDK version
 
     compileOptions {
@@ -25,7 +25,7 @@ android {
     defaultConfig {
         applicationId = "com.example.leafcare"
         minSdkVersion 23             // ✅ Updated to fix Firebase issue
-        targetSdkVersion 34
+        targetSdkVersion 35
         versionCode = 1
         versionName = "1.0"
         multiDexEnabled true         // ✅ Optional: helpful if you exceed 64K methods
