@@ -1,0 +1,92 @@
+import 'package:flutter/material.dart';
+import 'package:recipie_app/constants/constant_function.dart';
+
+class HomeTabBarView extends StatelessWidget {
+  final String recipe;
+  const HomeTabBarView({super.key, required this.recipe});
+
+  @override
+  Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
+    final w = MediaQuery.of(context).size.width;
+
+    const String fallbackImage = 'https://via.placeholder.com/150';
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: ConstantFunction.getResponse(recipe),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No data'));
+        }
+
+        return SizedBox(
+          height: h * .28,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: snapshot.data!.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 15),
+            itemBuilder: (context, index) {
+              final snap = snapshot.data![index];
+              final String title = snap['title'] ?? 'No title';
+              final String? rawImageUrl = snap['image_urls'];
+              final String imageUrl = (rawImageUrl != null &&
+                  rawImageUrl.isNotEmpty &&
+                  Uri.tryParse(rawImageUrl)?.hasAbsolutePath == true)
+                  ? rawImageUrl
+                  : fallbackImage;
+              final int time = snap['totalTime']?.toInt() ?? 0;
+              final int calories = snap['calories']?.toInt() ?? 0;
+
+              return Container(
+                margin: EdgeInsets.only(right: w * .02),
+                width: w * 0.4,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(15),
+                      child: Image.network(
+                        imageUrl,
+                        width: w,
+                        height: h * .17,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Image.network(
+                            fallbackImage,
+                            width: w,
+                            height: h * .17,
+                            fit: BoxFit.cover,
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(height: h * .01),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: w * .035,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: h * .005),
+                    Text(
+                      '$calories cal | $time min',
+                      style: TextStyle(
+                        fontSize: w * .03,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}

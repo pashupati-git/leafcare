@@ -1,0 +1,162 @@
+
+import 'package:flutter/material.dart';
+import 'package:recipie_app/constants/constant_function.dart';
+
+class Tbweg extends StatelessWidget {
+  const Tbweg({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
+    final w = MediaQuery.of(context).size.width;
+
+    return DefaultTabController(
+      length: 4,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            color: Colors.white,
+            height: h * .05,
+            child: TabBar(
+              unselectedLabelColor: Colors.red,
+              labelColor: Colors.white,
+              indicator: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              labelPadding: EdgeInsets.symmetric(horizontal: w * .012),
+              tabs: const [
+                TabItem(title: 'Breakfast'),
+                TabItem(title: 'Lunch'),
+                TabItem(title: 'Dinner'),
+                TabItem(title: 'Quick'),
+              ],
+            ),
+          ),
+          SizedBox(height: h * .02),
+          SizedBox(
+            height: h * .3,
+            child: const TabBarView(
+              children: [
+                HomeTabBarView(recipe: 'breakfast'),
+                HomeTabBarView(recipe: 'lunch'),
+                HomeTabBarView(recipe: 'dinner'),
+                HomeTabBarView(recipe: 'quick'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class TabItem extends StatelessWidget {
+  final String title;
+  const TabItem({super.key, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.red),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Center(
+          child: Text(
+            title,
+            style: const TextStyle(fontSize: 9.8),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class HomeTabBarView extends StatelessWidget {
+  final String recipe;
+  const HomeTabBarView({super.key, required this.recipe});
+
+  @override
+  Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
+    final w = MediaQuery.of(context).size.width;
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: ConstantFunction.getResponse(recipe),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No data'));
+        }
+
+        return SizedBox(
+          height: h * .28,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: snapshot.data!.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 15),
+            itemBuilder: (context, index) {
+              final snap = snapshot.data![index];
+              final String title = snap['title'] ?? 'No title';
+              final String imageUrl = (snap['image_urls'] != null && snap['image_urls'].isNotEmpty)
+                  ? snap['image_urls'][0]
+                  : 'https://via.placeholder.com/150';
+              final int time = snap['totalTime']?.toInt() ?? 0;
+              final int calories = snap['calories']?.toInt() ?? 0;
+
+              return Container(
+                margin: EdgeInsets.only(right: w * .02),
+                width: w * 0.4,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(15),
+                      child: Image.network(
+                        imageUrl,
+                        width: w,
+                        height: h * .17,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Image.network(
+                            'data:image/png;base64,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',
+                            width: w,
+                            height: h * .17,
+                            fit: BoxFit.cover,
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(height: h * .01),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: w * .035,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: h * .005),
+                    Text(
+                      '$calories cal | $time min',
+                      style: TextStyle(
+                        fontSize: w * .03,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
