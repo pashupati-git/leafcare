@@ -1,0 +1,144 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:leafcare/shop/all_products.dart';
+import 'package:leafcare/shop/cart_page.dart';
+import 'package:leafcare/shop/favourite_page.dart';
+import 'package:leafcare/shop/shop_home.dart';
+
+import '../auth/login_or_register_page.dart';
+import 'home.dart';
+
+class ShopPage extends StatelessWidget {
+  const ShopPage({super.key});
+
+  // Show logout confirmation dialog
+  Future<void> _showLogoutDialog(BuildContext context) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final username = user?.email?.split('@')[0] ?? 'User';
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: const [
+            Icon(CupertinoIcons.person_crop_circle_badge_xmark, color: Colors.red),
+            SizedBox(width: 8),
+            Text("Confirm Logout"),
+          ],
+        ),
+        content: Text("Do you want to logout, $username? 👋"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Yes"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await FirebaseAuth.instance.signOut();
+
+      if (context.mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const Home()),
+              (route) => false,
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    // Redirect to login page if user is null (extra safeguard)
+    if (user == null) {
+      // Use Future.microtask to avoid calling Navigator during build synchronously
+      Future.microtask(() {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginOrRegisterPage()),
+        );
+      });
+      // Return empty scaffold while redirecting
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    final username = user.email?.split('@')[0] ?? 'User';
+
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pop(context);
+        return false; // Prevent default back pop
+      },
+      child: DefaultTabController(
+        length: 4,
+        child: Scaffold(
+          backgroundColor: Colors.white,
+          appBar: AppBar(
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.black),
+              onPressed: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const Home()),
+                );
+              },
+            ),
+            title: const Text('Shop'),
+            centerTitle: true,
+            elevation: 3,
+            actions: [
+              InkWell(
+                onTap: () => _showLogoutDialog(context),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      Text(
+                        username.length > 8
+                            ? '${username.substring(0, 8)}...'
+                            : username,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(CupertinoIcons.power, color: Colors.red),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            bottom: const TabBar(
+              unselectedLabelColor: Colors.grey,
+              labelStyle: TextStyle(color: Colors.black),
+              tabs: [
+                Tab(text: 'Home'),
+                Tab(text: 'All Products'),
+                Tab(text: 'Favourite'),
+                Tab(text: 'Cart'),
+              ],
+            ),
+          ),
+          body: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: TabBarView(
+              children: [
+                ShopHome(),
+                AllProducts(),
+                FavouritePage(),
+                CartPage(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

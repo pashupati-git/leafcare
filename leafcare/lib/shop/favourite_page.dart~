@@ -1,0 +1,160 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'description_page.dart';
+import '../screens/home.dart';
+
+class FavouritePage extends StatelessWidget {
+  FavouritePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      return Scaffold(
+        body: const Center(child: Text("Please log in to view favorites")),
+      );
+    }
+
+    final favRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('favorites');
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F7F7),
+      body: SafeArea(
+        child: StreamBuilder<QuerySnapshot>(
+          stream: favRef.snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return Center(
+                child: Text(
+                  "No favourite items yet!",
+                  style: GoogleFonts.poppins(fontSize: 18, color: Colors.grey),
+                ),
+              );
+            }
+
+            final docs = snapshot.data!.docs;
+
+            return ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: docs.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 16),
+              itemBuilder: (context, index) {
+                final item = docs[index].data()! as Map<String, dynamic>;
+
+                // Parse price safely as double
+                double price = 0;
+                if (item['price'] is int) {
+                  price = (item['price'] as int).toDouble();
+                } else if (item['price'] is double) {
+                  price = item['price'];
+                } else if (item['price'] is String) {
+                  price = double.tryParse(item['price']) ?? 0;
+                }
+
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DescriptionPage(product: {
+                          'title': item['name'] ?? '',
+                          'price': price,
+                          'images': [item['image'] ?? ''],
+                          'description': 'Favorite product',
+                          'category': {'name': 'Favorites'},
+                        }),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.shade300,
+                          spreadRadius: 1,
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Builder(builder: (_) {
+                          final imageUrl = (item['image'] ?? '').toString().trim();
+                          final validImageUrl = (imageUrl.isNotEmpty &&
+                              Uri.tryParse(imageUrl)?.hasAbsolutePath == true)
+                              ? imageUrl
+                              : 'https://via.placeholder.com/80';
+
+                          return Image.network(
+                            validImageUrl,
+                            height: 80,
+                            width: 80,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Image.network(
+                                'https://via.placeholder.com/80',
+                                height: 80,
+                                width: 80,
+                                fit: BoxFit.contain,
+                              );
+                            },
+                          );
+                        }),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(item['name'] ?? '',
+                                  style: GoogleFonts.poppins(
+                                      fontSize: 16, fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 4),
+                              Text(
+                                "Size: ${item['size'] ?? ''}, Color: ${item['color'] ?? ''}",
+                                style: GoogleFonts.poppins(
+                                    fontSize: 12, color: Colors.grey),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                "\$${price.toStringAsFixed(2)}",
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.deepOrange,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.favorite, color: Colors.red),
+                          onPressed: () async {
+                            await favRef.doc(docs[index].id).delete();
+                            Fluttertoast.showToast(msg: "Removed from favorites");
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+}

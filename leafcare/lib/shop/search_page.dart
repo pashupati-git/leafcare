@@ -1,0 +1,236 @@
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+import 'description_page.dart'; // Make sure this exists and accepts product map
+
+class SearchPage extends StatefulWidget {
+  const SearchPage({Key? key}) : super(key: key);
+
+  @override
+  State<SearchPage> createState() => _SearchPageState();
+}
+
+class _SearchPageState extends State<SearchPage> {
+  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _minPriceController = TextEditingController();
+  final TextEditingController _maxPriceController = TextEditingController();
+
+  List<dynamic> _allProducts = [];
+  List<dynamic> _filteredProducts = [];
+  List<String> _allCategories = [];
+  String? _selectedCategory;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchProducts();
+  }
+
+  Future<void> fetchProducts() async {
+    final url = Uri.parse('https://api.escuelajs.co/api/v1/products');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final List<dynamic> products = json.decode(response.body);
+
+      setState(() {
+        _allProducts = products;
+        _allCategories = products
+            .map<String>((p) => p['category']?['name'] ?? '')
+            .where((c) => c.isNotEmpty)
+            .toSet()
+            .toList();
+      });
+
+      applyFilters();
+    }
+  }
+
+  void applyFilters() {
+    final query = _searchController.text.toLowerCase().trim();
+    final minPrice = int.tryParse(_minPriceController.text.trim());
+    final maxPrice = int.tryParse(_maxPriceController.text.trim());
+
+    if (query.isEmpty &&
+        minPrice == null &&
+        maxPrice == null &&
+        (_selectedCategory == null || _selectedCategory == '')) {
+      setState(() {
+        _filteredProducts = [];
+      });
+      return;
+    }
+
+    final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
+
+    setState(() {
+      _filteredProducts = _allProducts.where((product) {
+        final title = product['title'].toString().toLowerCase();
+        final description = product['description'].toString().toLowerCase();
+        final price = product['price'] ?? 0;
+        final category = product['category']?['name'] ?? '';
+
+        // Match if any query word is in title or description
+        final matchesQuery = queryWords.isEmpty
+            ? true
+            : queryWords.any((word) => title.contains(word) || description.contains(word));
+
+        final matchesMin = minPrice == null || price >= minPrice;
+        final matchesMax = maxPrice == null || price <= maxPrice;
+        final matchesCategory = _selectedCategory == null ||
+            _selectedCategory == '' ||
+            category == _selectedCategory;
+
+        return matchesQuery && matchesMin && matchesMax && matchesCategory;
+      }).toList();
+    });
+  }
+
+  String getValidImage(dynamic images) {
+    if (images is List && images.isNotEmpty) {
+      final firstImage = images[0];
+      if (firstImage is String && firstImage.isNotEmpty) {
+        return firstImage;
+      }
+    }
+    return 'https://via.placeholder.com/150';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Search Products'),
+        centerTitle: true,
+      ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          double horizontalPadding = constraints.maxWidth * 0.05;
+          if (horizontalPadding < 16) horizontalPadding = 16;
+
+          return Padding(
+            padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 16),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search by title or description',
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.search),
+                      onPressed: applyFilters,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onSubmitted: (_) => applyFilters(),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _minPriceController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Min Price',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (_) => applyFilters(),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _maxPriceController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Max Price',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (_) => applyFilters(),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: _selectedCategory,
+                  items: _allCategories
+                      .map<DropdownMenuItem<String>>(
+                        (cat) => DropdownMenuItem<String>(
+                      value: cat,
+                      child: Text(cat),
+                    ),
+                  )
+                      .toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedCategory = value;
+                    });
+                    applyFilters();
+                  },
+                  decoration: const InputDecoration(
+                    labelText: 'Select Category',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: _filteredProducts.isEmpty
+                      ? const Center(child: Text('No products found'))
+                      : ListView.builder(
+                    itemCount: _filteredProducts.length,
+                    itemBuilder: (context, index) {
+                      final item = _filteredProducts[index];
+                      final title = item['title'] ?? '';
+                      final price = item['price'] ?? '';
+                      final image = getValidImage(item['images']);
+                      final description = item['description'] ?? '';
+                      final category = item['category']?['name'] ?? '';
+
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                        leading: Image.network(
+                          image,
+                          width: 60,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Image.network(
+                              'https://via.placeholder.com/150',
+                              width: 60,
+                              fit: BoxFit.cover,
+                            );
+                          },
+                        ),
+                        title: Text(title),
+                        subtitle: Text("\$$price - $category"),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => DescriptionPage(product: {
+                                'id': item['id'],
+                                'title': title,
+                                'price': price,
+                                'images': item['images'],
+                                'description': description,
+                                'category': item['category'],
+                              }),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}

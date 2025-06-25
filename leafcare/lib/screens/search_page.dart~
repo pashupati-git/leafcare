@@ -1,181 +1,230 @@
 import 'package:flutter/material.dart';
-import 'package:recipie_app/screens/recipe_detail-page.dart';
-import '../components/text_field_widget.dart';
-import '../constants/constant_function.dart';
-import 'home.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+import 'description_page.dart'; // Make sure this exists
 
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  const SearchPage({Key? key}) : super(key: key);
 
   @override
   State<SearchPage> createState() => _SearchPageState();
 }
 
 class _SearchPageState extends State<SearchPage> {
-  String query = '';
-  final List<String> categories = ['vegan', 'vegetarian', 'pasta', 'salad'];
-  final Set<String> shownTitles = {};
-  final List<Map<String, dynamic>> searchResults = [];
+  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _minPriceController = TextEditingController();
+  final TextEditingController _maxPriceController = TextEditingController();
 
-  Future<void> performSearch(String input) async {
-    query = input.trim().toLowerCase(); // Ensure the input is lowercase.
-    shownTitles.clear();
-    searchResults.clear();
+  List<dynamic> _allProducts = [];
+  List<dynamic> _filteredProducts = [];
+  List<String> _allCategories = [];
+  String? _selectedCategory;
 
-    if (query.isEmpty) {
-      if (mounted) {
-        setState(() {});
-      }
+  @override
+  void initState() {
+    super.initState();
+    fetchProducts();
+  }
+
+  Future<void> fetchProducts() async {
+    final url = Uri.parse('https://api.escuelajs.co/api/v1/products');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final List<dynamic> products = json.decode(response.body);
+
+      setState(() {
+        _allProducts = products;
+        _allCategories = products
+            .map<String>((p) => p['category']?['name'] ?? '')
+            .where((c) => c.isNotEmpty)
+            .toSet()
+            .toList();
+      });
+
+      applyFilters();
+    }
+  }
+
+  void applyFilters() {
+    final query = _searchController.text.toLowerCase().trim();
+    final minPrice = int.tryParse(_minPriceController.text.trim());
+    final maxPrice = int.tryParse(_maxPriceController.text.trim());
+
+    // If no filters, clear filtered list
+    if (query.isEmpty &&
+        minPrice == null &&
+        maxPrice == null &&
+        (_selectedCategory == null || _selectedCategory == '')) {
+      setState(() {
+        _filteredProducts = [];
+      });
       return;
     }
 
-    for (String category in categories) {
-      final data = await ConstantFunction.getResponse(category);
+    setState(() {
+      _filteredProducts = _allProducts.where((product) {
+        final title = product['title'].toString().toLowerCase();
+        final description = product['description'].toString().toLowerCase();
+        final price = product['price'] ?? 0;
+        final category = product['category']?['name'] ?? '';
 
-      if (data == null || data.isEmpty) continue;
+        final matchesQuery = title.contains(query) || description.contains(query);
+        final matchesMin = minPrice == null || price >= minPrice;
+        final matchesMax = maxPrice == null || price <= maxPrice;
+        final matchesCategory = _selectedCategory == null ||
+            _selectedCategory == '' ||
+            category == _selectedCategory;
 
-      for (var item in data) {
-        final title = (item['title'] ?? '').toString().toLowerCase(); // Convert title to lowercase.
-        final ingredients = (item['ingredients'] as List<dynamic>?)
-            ?.map((e) => (e['name'] ?? '').toString().toLowerCase())
-            .join(' ') ??
-            ''; // Convert ingredients to lowercase.
+        return matchesQuery && matchesMin && matchesMax && matchesCategory;
+      }).toList();
+    });
+  }
 
-        // Check if title or ingredients contains the query (case-insensitive).
-        if ((title.contains(query) || ingredients.contains(query)) &&
-            !shownTitles.contains(title)) {
-          shownTitles.add(title);
-          searchResults.add(item);
-        }
+  String getValidImage(dynamic images) {
+    if (images is List && images.isNotEmpty) {
+      final firstImage = images[0];
+      if (firstImage is String && firstImage.isNotEmpty) {
+        return firstImage;
       }
     }
-
-    // Ensure that the widget is still mounted before calling setState().
-    if (mounted) {
-      setState(() {});
-    }
+    return 'https://via.placeholder.com/150';
   }
 
   @override
   Widget build(BuildContext context) {
-    final h = MediaQuery.of(context).size.height;
-    final w = MediaQuery.of(context).size.width;
-
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const Home()),
-            );
-          },
-        ),
-        title: const Text("Search"),
+        title: const Text('Search Products'),
+        centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextFieldWidget(
-              onChanged: (value) {
-                performSearch(value);
-              },
-            ),
-            const SizedBox(height: 20),
-            if (query.isNotEmpty && searchResults.isEmpty)
-              const Center(child: Text("No matching results.")),
-            if (searchResults.isNotEmpty)
-              Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.only(top: 10),
-                  itemCount: searchResults.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 20),
-                  itemBuilder: (context, index) {
-                    final item = searchResults[index];
-                    final title = item['title'] ?? 'No title';
-                    final imageUrl = (item['image_urls'] != null && item['image_urls'].isNotEmpty)
-                        ? item['image_urls'][0]
-                        : 'https://via.placeholder.com/150';
-                    final time = item['totalTime']?.toInt() ?? 0;
-                    final calories = item['nutrition']?['kcal']?.toInt() ?? 0;
-                    final ratingValue = item['rating']?['ratingValue']?.toDouble() ?? 0.0;
-                    final ratingCount = item['rating']?['ratingCount']?.toInt() ?? 0;
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          double horizontalPadding = constraints.maxWidth * 0.05;
+          if (horizontalPadding < 16) horizontalPadding = 16;
 
-                    return GestureDetector(
-                      onTap: () {
-                        // Navigate to the RecipeDetailPage with the selected item
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => RecipeDetailPage(
-                              title: title,
-                              imageUrl: imageUrl,
-                              time: time,
-                              calories: calories,
-                              ratingValue: ratingValue,
-                              ratingCount: ratingCount,
-                              ingredients: item['ingredients'] ?? [],
-                            ),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        width: w,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: Colors.white,
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Colors.black12,
-                              blurRadius: 4,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ClipRRect(
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(12),
-                                topRight: Radius.circular(12),
-                              ),
-                              child: Image.network(
-                                imageUrl,
-                                height: h * 0.2,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.all(10.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(title,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      )),
-                                  const SizedBox(height: 5),
-                                  Text("Time: ${time ~/ 60} min"),
-                                  Text("Calories: $calories kcal"),
-                                  Text("Rating: $ratingValue ($ratingCount)"),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+          return Padding(
+            padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 16),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search by title or description',
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.search),
+                      onPressed: applyFilters,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onSubmitted: (_) => applyFilters(),
                 ),
-              ),
-          ],
-        ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _minPriceController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Min Price',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (_) => applyFilters(),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _maxPriceController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Max Price',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (_) => applyFilters(),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: _selectedCategory,
+                  items: _allCategories
+                      .map<DropdownMenuItem<String>>(
+                        (cat) => DropdownMenuItem<String>(
+                      value: cat,
+                      child: Text(cat),
+                    ),
+                  )
+                      .toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedCategory = value;
+                    });
+                    applyFilters();
+                  },
+                  decoration: const InputDecoration(
+                    labelText: 'Select Category',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: _filteredProducts.isEmpty
+                      ? const Center(child: Text('No products found'))
+                      : ListView.builder(
+                    itemCount: _filteredProducts.length,
+                    itemBuilder: (context, index) {
+                      final item = _filteredProducts[index];
+                      final title = item['title'] ?? '';
+                      final price = item['price'] ?? '';
+                      final image = getValidImage(item['images']);
+                      final description = item['description'] ?? '';
+                      final category = item['category']?['name'] ?? '';
+
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                        leading: Image.network(
+                          image,
+                          width: 60,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Image.network(
+                              'https://via.placeholder.com/150',
+                              width: 60,
+                              fit: BoxFit.cover,
+                            );
+                          },
+                        ),
+                        title: Text(title),
+                        subtitle: Text("\$$price - $category"),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => DescriptionPage(product: {
+                                'id': item['id'],
+                                'title': title,
+                                'price': price,
+                                'images': item['images'],
+                                'description': description,
+                                'category': item['category'],
+                              }),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

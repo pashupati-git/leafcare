@@ -14,7 +14,6 @@ class OnBoardingScreen extends StatelessWidget {
     return Scaffold(
       body: Stack(
         children: [
-          // Background Image
           SizedBox(
             height: height,
             width: width,
@@ -23,8 +22,6 @@ class OnBoardingScreen extends StatelessWidget {
               fit: BoxFit.cover,
             ),
           ),
-
-          // Bottom Container
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -40,7 +37,7 @@ class OnBoardingScreen extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '+----LEAFCARE----+',
+                    'LeafCare',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: width * 0.06,
@@ -50,7 +47,7 @@ class OnBoardingScreen extends StatelessWidget {
                   ),
                   SizedBox(height: height * 0.01),
                   Text(
-                    'Check out the app and start detecting the plant\'s diseases',
+                    'Learn how to take care of your plants and keep them healthy',
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.9),
                       fontSize: width * 0.04,

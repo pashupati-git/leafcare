@@ -1,0 +1,275 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+
+class DescriptionPage extends StatefulWidget {
+  final Map<String, dynamic> product;
+
+  const DescriptionPage({super.key, required this.product});
+
+  @override
+  State<DescriptionPage> createState() => _DescriptionPageState();
+}
+
+class _DescriptionPageState extends State<DescriptionPage> {
+  bool _isDescriptionExpanded = false;
+  int? selectedSize = 32;
+  Color? selectedColor = Colors.teal;
+  bool isFavorite = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkIfFavorite();
+  }
+
+  void _checkIfFavorite() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final favRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('favorites');
+
+    final existing = await favRef
+        .where('name', isEqualTo: widget.product['title'] ?? '')
+        .limit(1)
+        .get();
+
+    if (existing.docs.isNotEmpty) {
+      setState(() {
+        isFavorite = true;
+      });
+    }
+  }
+
+  Future<void> addToFavorites() async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      Fluttertoast.showToast(msg: "Please log in to save favorites");
+      return;
+    }
+
+    final favRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('favorites');
+
+    final existing = await favRef
+        .where('name', isEqualTo: widget.product['title'] ?? '')
+        .limit(1)
+        .get();
+
+    if (existing.docs.isNotEmpty) {
+      Fluttertoast.showToast(msg: "Already in favorites");
+      return;
+    }
+
+    // Save 'size' as int, 'color' as string hex or name
+    await favRef.add({
+      'name': widget.product['title'] ?? '',
+      'image': (widget.product['images'] as List).isNotEmpty
+          ? widget.product['images'][0]
+          : '',
+      'price': widget.product['price'] ?? 0,
+      'size': selectedSize ?? 32,
+      'color': _colorToHex(selectedColor ?? Colors.teal),
+    });
+
+    setState(() {
+      isFavorite = true;
+    });
+
+    Fluttertoast.showToast(msg: "Added to favorites");
+  }
+
+  Future<void> addToCart() async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      Fluttertoast.showToast(msg: "Please log in to add items to cart");
+      return;
+    }
+
+    final cartRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('cart')
+        .doc(widget.product['id'].toString());
+
+    final cartItem = await cartRef.get();
+
+    if (cartItem.exists) {
+      Fluttertoast.showToast(msg: "Item already in cart");
+      return;
+    }
+
+    await cartRef.set({
+      'id': widget.product['id'],
+      'name': widget.product['title'] ?? '',
+      'image': (widget.product['images'] as List).isNotEmpty
+          ? widget.product['images'][0]
+          : '',
+      'price': widget.product['price'] ?? 0,
+      'size': selectedSize ?? 32,
+      'color': _colorToHex(selectedColor ?? Colors.teal),
+      'isFavorite': false,
+    });
+
+    Fluttertoast.showToast(msg: "Added to cart");
+  }
+
+  String _colorToHex(Color color) {
+    // Convert color to hex string like #FF123456
+    return '#${color.value.toRadixString(16).padLeft(8, '0')}';
+  }
+
+  Color _hexToColor(String hex) {
+    // Convert back hex string to Color
+    hex = hex.replaceAll('#', '');
+    if (hex.length == 6) hex = 'FF$hex'; // Add alpha if missing
+    return Color(int.parse(hex, radix: 16));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final product = widget.product;
+    final imageUrl = (product['images'] as List).isNotEmpty
+        ? product['images'][0]
+        : 'https://via.placeholder.com/150';
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F7F7),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text('Product Details', style: TextStyle(color: Colors.black)),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(
+              isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: isFavorite ? Colors.red : Colors.black,
+            ),
+            onPressed: addToFavorites,
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            Image.network(imageUrl, height: 250, fit: BoxFit.cover),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product['title'] ?? "No Title",
+                    style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () => setState(() {
+                      _isDescriptionExpanded = !_isDescriptionExpanded;
+                    }),
+                    child: Text(
+                      product['description'] ?? "No Description",
+                      maxLines: _isDescriptionExpanded ? null : 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(fontSize: 14),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    "Price: \$${(product['price'] is num) ? (product['price'] as num).toStringAsFixed(2) : product['price'].toString()}",
+                    style: GoogleFonts.poppins(
+                        fontSize: 18, color: Colors.deepOrange, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 20),
+                  Text("Select Size", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 10,
+                    children: [28, 29, 30, 32, 34].map((size) {
+                      return ChoiceChip(
+                        label: Text("$size"),
+                        selected: selectedSize == size,
+                        onSelected: (_) => setState(() => selectedSize = size),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  Text("Select Color", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      _buildColorBox(Colors.teal),
+                      _buildColorBox(Colors.black),
+                      _buildColorBox(Colors.grey.shade400),
+                      _buildColorBox(Colors.white, hasBorder: true),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: addToCart,
+                      icon: const Icon(Icons.shopping_cart, color: Colors.white),
+                      label: Text(
+                        "Add to Cart",
+                        style: GoogleFonts.poppins(color: Colors.white, fontSize: 16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildColorBox(Color color, {bool hasBorder = false}) {
+    final isSelected = selectedColor == color;
+    return GestureDetector(
+      onTap: () => setState(() => selectedColor = color),
+      child: Container(
+        margin: const EdgeInsets.only(right: 12),
+        height: 32,
+        width: 32,
+        decoration: BoxDecoration(
+          color: color,
+          border: Border.all(
+            color: isSelected
+                ? Colors.deepOrange
+                : hasBorder
+                ? Colors.grey
+                : Colors.transparent,
+            width: 2,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+}

@@ -1,0 +1,224 @@
+import 'dart:io';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart'; // ✅ Required for MediaType
+import 'package:path/path.dart' as path;
+
+class MlHome extends StatefulWidget {
+  const MlHome({super.key});
+
+  @override
+  State<MlHome> createState() => _MlHomeState();
+}
+
+class _MlHomeState extends State<MlHome> {
+  final ImagePicker picker = ImagePicker();
+  List<XFile> _images = [];
+  String? _status = '';
+  String? _disease = '';
+  double? _survivability = 0.0;
+  double? _confidence = 0.0;
+  bool _isLoading = false;
+
+  Future<void> _pickImages() async {
+    try {
+      final List<XFile>? pickedFiles = await picker.pickMultiImage();
+      if (pickedFiles != null && pickedFiles.isNotEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _images = pickedFiles;
+          _status = '';
+          _disease = '';
+          _survivability = 0.0;
+          _confidence = 0.0;
+        });
+      }
+    } catch (e) {
+      print("❌ Error picking image: $e");
+    }
+  }
+
+  Future<Map<String, dynamic>?> _uploadAndGetPrediction(File file) async {
+    final uri = Uri.parse('http://192.168.1.4:8000/predict/');
+
+    // Determine the correct content type
+    String fileExtension = path.extension(file.path).toLowerCase();
+    MediaType mediaType;
+    if (fileExtension == '.png') {
+      mediaType = MediaType('image', 'png');
+    } else {
+      mediaType = MediaType('image', 'jpeg'); // Default to jpeg
+    }
+
+    final request = http.MultipartRequest('POST', uri)
+      ..files.add(await http.MultipartFile.fromPath(
+        'file',
+        file.path,
+        filename: path.basename(file.path),
+        contentType: mediaType,
+      ));
+
+    final response = await request.send();
+    final responseBody = await response.stream.bytesToString();
+
+    print('📡 Status Code: ${response.statusCode}');
+    print('📨 Response Body: $responseBody');
+
+    if (response.statusCode == 200) {
+      return jsonDecode(responseBody);
+    } else {
+      throw Exception('Server error: $responseBody');
+    }
+  }
+
+  Future<void> _startDiagnosis() async {
+    if (_images.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No image selected for diagnosis.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final file = File(_images[0].path);
+      final data = await _uploadAndGetPrediction(file);
+
+      if (!mounted) return;
+      setState(() {
+        _status = data?['status'] ?? '';
+        _disease = data?['disease'] ?? 'Unknown';
+        _confidence = (data?['confidence'] ?? 0).toDouble();
+        _survivability = (data?['survivability'] ?? 0).toDouble();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error during diagnosis: $e')),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isLargeScreen = MediaQuery.of(context).size.width > 600;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Leaf Disease Diagnosis'),
+        centerTitle: true,
+        elevation: 3,
+        backgroundColor: Colors.green[700],
+      ),
+      body: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Card(
+                  elevation: 5,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    height: isLargeScreen ? 320 : 220,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.teal.shade50,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: _images.isEmpty
+                        ? const Center(
+                      child: Text('No images selected',
+                          style: TextStyle(fontSize: 16, color: Colors.grey)),
+                    )
+                        : GridView.builder(
+                      itemCount: _images.length,
+                      scrollDirection: Axis.horizontal,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 1,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 1,
+                      ),
+                      itemBuilder: (context, index) {
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(
+                            File(_images[index].path),
+                            fit: BoxFit.cover,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  onPressed: _pickImages,
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text('Load Images from Device'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.teal,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                    textStyle: const TextStyle(fontSize: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _startDiagnosis,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepOrange,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                        : const Text('Start Diagnosis'),
+                  ),
+                ),
+                if (_status != null && _status!.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  Text('Status: $_status',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ],
+                if (_disease != null && _disease!.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text('Diagnosis: $_disease',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('Survivability: ${_survivability?.toStringAsFixed(2)}%',
+                      style: const TextStyle(fontSize: 16)),
+                  Text('Confidence: ${_confidence?.toStringAsFixed(2)}%',
+                      style: const TextStyle(fontSize: 16)),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

@@ -1,103 +1,59 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_nav_bar/google_nav_bar.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
-class BottomNavBar extends StatefulWidget {
+class BottomNavBar extends StatelessWidget {
   final int SelectedItem;
   final Function(int) onTap;
 
-  const BottomNavBar({super.key, required this.onTap, required this.SelectedItem});
+  const BottomNavBar({
+    super.key,
+    required this.onTap,
+    required this.SelectedItem,
+  });
 
-  @override
-  State<BottomNavBar> createState() => _BottomNavBarState();
-}
-
-class _BottomNavBarState extends State<BottomNavBar> {
   @override
   Widget build(BuildContext context) {
-    final h = MediaQuery.of(context).size.height;
-    final w = MediaQuery.of(context).size.width;
-    final user = FirebaseAuth.instance.currentUser;
-    final isLoggedIn = user != null;
-
-    String getUserEmailPrefix() {
-      if (user != null && user.email != null && user.email!.isNotEmpty) {
-        // Return the part before "@" sign in uppercase
-        return user.email!.split('@')[0].toUpperCase();
-      }
-      return '';
-    }
-
-    // Logout confirmation dialog
-    void _showLogoutDialog() async {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text("Confirm Logout"),
-          content: const Text("Do you want to log out?"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text("Cancel"),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text("Yes"),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(50),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 10,
+              offset: Offset(0, 4),
             ),
           ],
         ),
-      );
-
-      if (confirm == true) {
-        await FirebaseAuth.instance.signOut();
-        setState(() {}); // Refresh UI to show sign-out state
-        widget.onTap(0); // Optional: redirect to Home or sign-in page
-      }
-    }
-
-    return Container(
-      color: Colors.grey[100],
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: w * .015, vertical: h * .01),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: GNav(
-          gap: 10,
-          tabBorderRadius: 100,
-          backgroundColor: Colors.grey[100]!,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          gap: 6,
+          iconSize: 24,
+          textSize: 14,
+          tabBorderRadius: 50,
+          backgroundColor: Colors.transparent,
           activeColor: Colors.white,
-          color: Colors.blue[600],
+          color: Colors.white60,
           tabBackgroundGradient: LinearGradient(
             colors: [
-              Colors.blue[400]!,
-              Colors.blueAccent.shade700,
+              Colors.deepOrange[400]!,
+              Colors.deepOrangeAccent.shade700,
             ],
             begin: Alignment.topLeft,
-            end: Alignment.topRight,
+            end: Alignment.bottomRight,
           ),
-          iconSize: 30,
-          textSize: 18,
-          padding: EdgeInsets.symmetric(horizontal: w * .01, vertical: h * .01),
-          tabs: [
-            const GButton(icon: CupertinoIcons.home, text: 'Home'),
-            const GButton(icon: CupertinoIcons.heart_circle, text: 'Cure'),
-            const GButton(icon: CupertinoIcons.chat_bubble, text: 'Hub'),
-            const GButton(icon: Icons.shop_2, text: 'Shop'),
-
-            GButton(
-              icon: CupertinoIcons.person,
-              text: isLoggedIn ? getUserEmailPrefix() : 'Login',
-              onPressed: () {
-                if (isLoggedIn) {
-                  // Show logout confirmation dialog
-                  _showLogoutDialog();
-                } else {
-                  widget.onTap(0); // Navigate to login page if not logged in
-                }
-              },
-            ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          tabs: const [
+            GButton(icon: CupertinoIcons.home, text: 'Home'),
+            GButton(icon: CupertinoIcons.heart_circle, text: 'Cure'),
+            GButton(icon: CupertinoIcons.cart_fill, text: 'Shop'),
           ],
-          onTabChange: widget.onTap,
-          selectedIndex: widget.SelectedItem,
+          selectedIndex: SelectedItem,
+          onTabChange: onTap,
         ),
       ),
     );

@@ -1,0 +1,72 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:leafcare/components/bottom_nav_bar.dart';
+import 'package:leafcare/ml/ml_home.dart';
+import 'package:leafcare/screens/home_page.dart';
+import 'package:leafcare/screens/shop_page.dart';
+
+import '../auth/login_or_register_page.dart';
+
+class Home extends StatefulWidget {
+  const Home({super.key});
+
+  @override
+  State<Home> createState() => _HomeState();
+}
+
+class _HomeState extends State<Home> {
+  late PageController pageController;
+  int currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    pageController = PageController(initialPage: currentIndex);
+  }
+
+  @override
+  void dispose() {
+    pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        final isLoggedIn = snapshot.hasData;
+
+        return Scaffold(
+          bottomNavigationBar: BottomNavBar(
+            SelectedItem: currentIndex,
+            onTap: (index) {
+              pageController.animateToPage(
+                index,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+              );
+              setState(() {
+                currentIndex = index;
+              });
+            },
+          ),
+          body: PageView(
+            controller: pageController,
+            onPageChanged: (index) {
+              setState(() {
+                currentIndex = index;
+              });
+            },
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              const HomePage(), 
+              const MlHome(),
+              isLoggedIn ? const ShopPage() : const LoginOrRegisterPage(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}

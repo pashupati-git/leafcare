@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:leafcare/components/bottom_nav_bar.dart';
-import 'package:leafcare/hub/hub_home.dart';
 import 'package:leafcare/ml/ml_home.dart';
-import 'package:leafcare/screens/auth_page.dart';
-import 'package:leafcare/shop/shop_home.dart';
+import 'package:leafcare/screens/home_page.dart';
+import 'package:leafcare/screens/shop_page.dart';
 
-import 'home_screen.dart';
+import '../auth/login_or_register_page.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -36,8 +35,11 @@ class _HomeState extends State<Home> {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
+        final isLoggedIn = snapshot.hasData;
+
         return Scaffold(
           bottomNavigationBar: BottomNavBar(
+            SelectedItem: currentIndex,
             onTap: (index) {
               pageController.animateToPage(
                 index,
@@ -48,7 +50,6 @@ class _HomeState extends State<Home> {
                 currentIndex = index;
               });
             },
-            SelectedItem: currentIndex,
           ),
           body: PageView(
             controller: pageController,
@@ -58,12 +59,10 @@ class _HomeState extends State<Home> {
               });
             },
             physics: const NeverScrollableScrollPhysics(),
-            children: const [
-              HomePage(),
-              MlHome(),
-              HubHome(),
-              ShopHome(),
-              AuthPage(),
+            children: [
+              const HomePage(),
+              const MlHome(),
+              isLoggedIn ? const ShopPage() : const LoginOrRegisterPage(),
             ],
           ),
         );
